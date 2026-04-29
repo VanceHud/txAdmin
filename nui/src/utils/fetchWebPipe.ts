@@ -4,10 +4,10 @@ const WEBPIPE_PATH = "https://monitor/WebPipe";
 
 type ValidPath = `/${string}`;
 
-enum PipeTimeout {
+export enum PipeTimeout {
   SHORT = 1500,
   MEDIUM = 5000,
-  LONG = 9000,
+  LONG = 15000,
 }
 
 interface fetchWebPipeOpts<T> {
@@ -45,8 +45,14 @@ export const fetchWebPipe = async <T = any>(
 
   // Timeout logic for fetch request
   const timeoutId = setTimeout(() => abortionController.abort(), timeout);
-  const resp = await fetch(reqPath, fetchOpts);
-  clearTimeout(timeoutId);
+
+  const resp = await (async () => {
+    try {
+      return await fetch(reqPath, fetchOpts);
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  })();
 
   if (resp.status === 404) {
     return false;

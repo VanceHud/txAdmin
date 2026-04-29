@@ -5,12 +5,38 @@ import {
   useRecoilValue,
   useSetRecoilState,
 } from "recoil";
-import { fetchWebPipe } from "../utils/fetchWebPipe";
+import { fetchWebPipe, PipeTimeout } from "../utils/fetchWebPipe";
 import { debugLog } from "../utils/debugLog";
 import { MockedPlayerDetails } from "../utils/constants";
 import { PlayerData } from "../hooks/usePlayerListListener";
 import { PlayerModalResp, PlayerModalSuccess } from "@shared/playerApiTypes";
 import { GenericApiErrorResp } from "@shared/genericApiTypes";
+
+const getPlayerDetailsFetchError = (error: unknown) => {
+  const errorName = error instanceof Error
+    ? error.name
+    : typeof error === "object" && error && "name" in error
+      ? String(error.name)
+      : "";
+  const errorMessage = error instanceof Error
+    ? error.message
+    : typeof error === "object" && error && "message" in error
+      ? String(error.message)
+      : "";
+
+  if (
+    errorName === "AbortError" ||
+    errorMessage === "The user aborted a request."
+  ) {
+    return "Timed out fetching player data. Please try again.";
+  }
+
+  if (errorMessage) {
+    return errorMessage;
+  }
+
+  return "Unknown error :(";
+};
 
 const playerDetails = {
   selectedPlayerData: selector<PlayerModalResp | undefined>({
@@ -21,10 +47,16 @@ const playerDetails = {
       if (!assocPlayer) return;
       const assocPlayerId = assocPlayer.id;
 
-      const res: any = await fetchWebPipe<PlayerModalResp>(
-        `/player?mutex=current&netid=${assocPlayerId}`,
-        { mockData: MockedPlayerDetails }
-      );
+      let res: any;
+      try {
+        res = await fetchWebPipe<PlayerModalResp>(
+          `/player?mutex=current&netid=${assocPlayerId}`,
+          { mockData: MockedPlayerDetails, timeout: PipeTimeout.LONG }
+        );
+      } catch (error) {
+        debugLog("FetchWebPipeError", error, "PlayerFetch");
+        return { error: getPlayerDetailsFetchError(error) };
+      }
       debugLog("FetchWebPipe", res, "PlayerFetch");
 
       if (res.error) {
